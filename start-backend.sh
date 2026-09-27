@@ -1,42 +1,44 @@
 #!/bin/bash
 
-# Bank Statement Parser - Backend Startup Script
+# Bank Statement Parser - API server startup script
 
+set -e
 cd "$(dirname "$0")/backend"
 
-# Check if venv exists
 if [ ! -d "venv" ]; then
     echo "Creating virtual environment..."
     python3 -m venv venv
 fi
 
-# Activate venv
-echo "Activating virtual environment..."
 source venv/bin/activate
 
-# Install dependencies if needed
-if [ ! -f "venv/.installed" ]; then
+# Reinstall when requirements.txt changes
+if [ ! -f "venv/.installed" ] || [ requirements.txt -nt venv/.installed ]; then
     echo "Installing dependencies..."
     pip install -r requirements.txt
     touch venv/.installed
 fi
 
-# Check for .env file
 if [ ! -f ".env" ]; then
-    echo "ERROR: .env file not found!"
-    echo "Please copy .env.example to .env and add your GROQ_API_KEY"
+    echo "ERROR: backend/.env not found."
+    echo "Copy backend/.env.example to backend/.env and set GROQ_API_KEY."
     exit 1
 fi
 
-# Check for GROQ_API_KEY
-if ! grep -q "GROQ_API_KEY=gsk_" .env; then
-    echo "WARNING: GROQ_API_KEY may not be set correctly in .env"
-    echo "Please make sure to add your actual GroqCloud API key"
+if ! redis-cli ping > /dev/null 2>&1; then
+    echo "WARNING: Redis is not responding. Uploads will fail until it is running"
+    echo "  (brew services start redis, or: docker run -d -p 6379:6379 redis)"
 fi
 
+echo "Applying database migrations..."
+alembic upgrade head
+
+PORT=$(grep -E '^PORT=' .env | cut -d= -f2)
+PORT=${PORT:-8000}
+
 echo ""
-echo "Starting Flask backend on http://localhost:5000"
-echo "Press Ctrl+C to stop"
+echo "Starting API on http://localhost:$PORT (docs at /docs)"
+echo "Start the worker in another terminal: ./start-worker.sh"
 echo ""
 
-python run.py
+exec uvicorn main:app --reload --host 0.0.0.0 --port "$PORT"

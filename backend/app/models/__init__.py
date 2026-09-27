@@ -1,9 +1,17 @@
-from .statement import BankStatement, Transaction, CustomerDetails, BankDetails, ProcessingLog
+from .statement import (
+    BankDetails,
+    BankStatement,
+    CustomerDetails,
+    ProcessingStatus,
+    Transaction,
+    TransactionSchema,
+)
 
 __all__ = [
-    "BankStatement",
-    "Transaction",
-    "CustomerDetails",
     "BankDetails",
-    "ProcessingLog",
+    "BankStatement",
+    "CustomerDetails",
+    "ProcessingStatus",
+    "Transaction",
+    "TransactionSchema",
 ]

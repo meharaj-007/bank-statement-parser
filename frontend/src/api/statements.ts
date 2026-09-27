@@ -1,4 +1,4 @@
-import { apiClient } from './client';
+import { API_BASE_URL, apiClient } from './client';
 import type {
     Statement,
     StatementDetail,
@@ -41,10 +41,7 @@ export const statementsApi = {
     },
 
     // Get statement file URL
-    getFileUrl: (statementId: number): string => {
-        const baseURL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
-        return `${baseURL}/statements/${statementId}/file`;
-    },
+    getFileUrl: (statementId: number): string => `${API_BASE_URL}/statements/${statementId}/file`,
 
     // Delete statement
     delete: async (statementId: number): Promise<void> => {

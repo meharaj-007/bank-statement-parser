@@ -20,10 +20,12 @@ instance/
 
 # Uploads
 uploads/
-extracted_images/
+page_images/
 
 # Database
 *.sqlite
+*.db-wal
+*.db-shm
 *.db
 
 # IDE

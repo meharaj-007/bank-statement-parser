@@ -1,65 +1,54 @@
-from typing import AsyncGenerator
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
-from sqlalchemy.orm import declarative_base
+import json
+from typing import Generator
+
+from sqlalchemy import create_engine, event
+from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from .config import settings
 
-# Create async engine
-engine = create_async_engine(
-    settings.DATABASE_URL,
-    echo=settings.DEBUG,
-    future=True,
-)
 
-# Create async session factory
-AsyncSessionLocal = async_sessionmaker(
-    engine,
-    class_=AsyncSession,
-    expire_on_commit=False,
-    autocommit=False,
-    autoflush=False,
-)
-
-# Base class for models
-Base = declarative_base()
+class Base(DeclarativeBase):
+    """Declarative base shared by all models."""
 
 
-async def get_db() -> AsyncGenerator[AsyncSession, None]:
+def _make_engine(url: str):
+    is_sqlite = url.startswith("sqlite")
+    engine = create_engine(
+        url,
+        # The API and the Celery worker are separate processes writing to the same file.
+        connect_args={"check_same_thread": False, "timeout": 30} if is_sqlite else {},
+        pool_pre_ping=True,
+        # Keep non-ASCII text (e.g. Bengali narrations) searchable with LIKE
+        json_serializer=lambda obj: json.dumps(obj, ensure_ascii=False, default=str),
+    )
+
+    if is_sqlite:
+        @event.listens_for(engine, "connect")
+        def _sqlite_pragmas(dbapi_connection, _):
+            cursor = dbapi_connection.cursor()
+            cursor.execute("PRAGMA journal_mode=WAL")
+            cursor.execute("PRAGMA foreign_keys=ON")
+            cursor.close()
+
+    return engine
+
+
+engine = _make_engine(settings.DATABASE_URL)
+
+SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
+
+
+def get_db() -> Generator[Session, None, None]:
     """
-    Dependency for getting async database sessions.
+    FastAPI dependency yielding a database session.
 
     Usage:
-        @app.get("/items")
-        async def read_items(db: AsyncSession = Depends(get_db)):
+        @router.get("/items")
+        def read_items(db: Session = Depends(get_db)):
             ...
     """
-    async with AsyncSessionLocal() as session:
-        try:
-            yield session
-            await session.commit()
-        except Exception:
-            await session.rollback()
-            raise
-        finally:
-            await session.close()
-
-
-async def init_db() -> None:
-    """
-    Initialize database tables.
-    Called on application startup.
-    """
-    # Import models to ensure they're registered with Base
-    from app.models.statement import BankStatement, Transaction, CustomerDetails, BankDetails, ProcessingLog
-
-    async with engine.begin() as conn:
-        # Create all tables using the shared Base
-        await conn.run_sync(Base.metadata.create_all)
-
-
-async def close_db() -> None:
-    """
-    Close database connections.
-    Called on application shutdown.
-    """
-    await engine.dispose()
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()

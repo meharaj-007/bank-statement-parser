@@ -22,6 +22,7 @@ export interface StatementDetail {
   customer_details: Record<string, any> | null;
   bank_details: Record<string, any> | null;
   transaction_count: number;
+  error_message: string | null;
 }
 
 export interface TransactionSchema {
@@ -38,6 +39,7 @@ export interface Transaction {
   transaction_date: string | null;
   amount: string | null;
   transaction_type: 'credit' | 'debit' | null;
+  balance: string | null;
   data: Record<string, any>;  // Dynamic columns
   page_number: number | null;
 }

@@ -1,72 +1,57 @@
+import logging
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-import logging
 
+from app.api.errors import register_error_handlers
+from app.api.router import api_router
 from app.core.config import settings
-from app.core.database import init_db, close_db
-from app.api.v1.api import api_router
+from app.core.database import engine
+from app.core.logging import setup_logging
 
+setup_logging()
 logger = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    logger.info(f"Starting {settings.APP_NAME} v{settings.VERSION} ({settings.ENVIRONMENT})")
+    # Accessing the paths creates the directories
+    logger.info(f"Uploads: {settings.upload_path.resolve()}")
+    yield
+    engine.dispose()
 
 
 app = FastAPI(
     title=settings.APP_NAME,
-    description="Multi-agent OCR pipeline for bank statement processing with OlmOCR and Groq",
+    description="Bank statement extraction with per-page Groq vision models",
     version=settings.VERSION,
     debug=settings.DEBUG,
+    lifespan=lifespan,
 )
 
-# CORS middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins_list,
-    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-
-@app.on_event("startup")
-async def startup_event():
-    """Initialize database and services on startup."""
-    logger.info(f"Starting {settings.APP_NAME} v{settings.VERSION}")
-    logger.info(f"Environment: {settings.ENVIRONMENT}")
-    logger.info(f"Debug mode: {settings.DEBUG}")
-
-    # Initialize database
-    await init_db()
-    logger.info("Database initialized")
-
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    """Clean up resources on shutdown."""
-    logger.info("Shutting down application")
-    await close_db()
-    logger.info("Database connections closed")
-
-
-# Include API router
-app.include_router(api_router, prefix="/api/v1")
+register_error_handlers(app)
+app.include_router(api_router, prefix="/api")
 
 
 @app.get("/")
-async def root():
-    """Root endpoint with API information."""
+def root():
     return {
         "name": settings.APP_NAME,
         "version": settings.VERSION,
-        "description": "Multi-agent OCR pipeline for bank statement processing",
         "docs": "/docs",
-        "health": "/health"
+        "health": "/health",
     }
 
 
 @app.get("/health")
-async def health_check():
-    """Health check endpoint."""
-    return {
-        "status": "healthy",
-        "environment": settings.ENVIRONMENT,
-        "version": settings.VERSION
-    }
+def health_check():
+    return {"status": "healthy", "environment": settings.ENVIRONMENT, "version": settings.VERSION}

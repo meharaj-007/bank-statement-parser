@@ -11,6 +11,10 @@ import { Badge } from '@/components/ui/badge';
 import { Spinner } from '@/components/ui/spinner';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 
+const POLL_INTERVAL_MS = 2000;
+
+const isProcessing = (status?: string) => status === 'pending' || status === 'processing';
+
 export default function StatementDetail() {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
@@ -23,6 +27,20 @@ export default function StatementDetail() {
             loadStatement(parseInt(id));
         }
     }, [id]);
+
+    // Processing runs in the background worker; poll until it settles
+    useEffect(() => {
+        if (!id || !isProcessing(statement?.status)) return;
+
+        const timer = setTimeout(async () => {
+            try {
+                setStatement(await statementsApi.get(parseInt(id)));
+            } catch (err) {
+                console.error(err);
+            }
+        }, POLL_INTERVAL_MS);
+        return () => clearTimeout(timer);
+    }, [id, statement]);
 
     const loadStatement = async (statementId: number) => {
         setLoading(true);
@@ -219,7 +237,7 @@ export default function StatementDetail() {
                             <div>
                                 <p className="text-sm font-medium text-red-900">Processing failed</p>
                                 <p className="text-sm text-red-700 mt-1">
-                                    An error occurred while processing this statement.
+                                    {statement.error_message || 'An error occurred while processing this statement.'}
                                 </p>
                             </div>
                         </div>
@@ -227,8 +245,42 @@ export default function StatementDetail() {
                 </Card>
             )}
 
-            {/* Tabs - File viewing available for all, other tabs only for completed */}
-            <Tabs defaultValue={statement.status === 'completed' ? 'overview' : 'file'} className="w-full">
+            {/* Processing Status */}
+            {isProcessing(statement.status) && (
+                <Card className="mb-6 border-blue-200 bg-blue-50">
+                    <CardContent className="pt-6">
+                        <div className="flex items-center">
+                            <Spinner size="sm" className="mr-3" />
+                            <div>
+                                <p className="text-sm font-medium text-blue-900">
+                                    {statement.status === 'pending' ? 'Waiting for a worker' : 'Extracting transactions'}
+                                </p>
+                                <p className="text-sm text-blue-700 mt-1">
+                                    {statement.page_count
+                                        ? `Reading ${statement.page_count} page${statement.page_count === 1 ? '' : 's'}. This page updates automatically.`
+                                        : 'This page updates automatically.'}
+                                </p>
+                            </div>
+                        </div>
+                    </CardContent>
+                </Card>
+            )}
+
+            {/* Completed, but some pages could not be read */}
+            {statement.status === 'completed' && statement.error_message && (
+                <Card className="mb-6 border-amber-200 bg-amber-50">
+                    <CardContent className="pt-6">
+                        <div className="flex items-start">
+                            <AlertCircle className="h-5 w-5 mr-3 text-amber-600 mt-0.5" />
+                            <p className="text-sm text-amber-900">{statement.error_message}</p>
+                        </div>
+                    </CardContent>
+                </Card>
+            )}
+
+            {/* Tabs - File viewing available for all, other tabs only for completed.
+                Keyed on status so the default tab resets once processing finishes. */}
+            <Tabs key={statement.status} defaultValue={statement.status === 'completed' ? 'overview' : 'file'} className="w-full">
                 <TabsList className="mb-6">
                     {statement.status === 'completed' && (
                         <TabsTrigger value="overview">

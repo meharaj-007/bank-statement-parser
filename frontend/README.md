@@ -10,7 +10,7 @@ npm install
 
 # Configure environment (optional)
 cp .env.example .env
-# Edit .env if your backend URL is different from http://localhost:5000
+# Edit .env if your backend URL is different from http://localhost:8000
 
 # Start development server
 npm run dev

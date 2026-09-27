@@ -46,11 +46,6 @@ backend/uploads/
 backend/database.db
 backend/*.db
 
-# Server specific
-server/logs/
-server/uploads/
-server/database.db
-server/*.db
 
 # Alembic
 backend/alembic/versions/*.pyc

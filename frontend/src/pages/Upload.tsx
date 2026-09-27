@@ -104,6 +104,12 @@ export default function Upload() {
                 navigate(`/statements/${response.statement_id}`);
             }, 500);
         } catch (err: any) {
+            // Same file uploaded before: open the existing statement instead
+            const existingId = err.response?.status === 409 && err.response?.data?.existing_statement_id;
+            if (existingId) {
+                navigate(`/statements/${existingId}`);
+                return;
+            }
             setError(err.response?.data?.message || err.message || 'Failed to upload file. Please try again.');
             setUploading(false);
             setUploadProgress(0);
